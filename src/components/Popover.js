@@ -8,7 +8,7 @@ class Popover extends React.Component {
     open: false,
   };
 
-  componentWillMount() {
+  UNSAFE_componentWillMount() {
     this.anchorEl = null;
   }
 
@@ -57,7 +57,7 @@ class Popover extends React.Component {
       horizontal: 'center',
     };
 
-    const triggerEl = React.cloneElement(trigger, {
+    const triggerEl = React.cloneElement(<span>{trigger}</span>, {
       key: 'content',
       ref: el => (this.anchorEl = el),
       onClick: () => {

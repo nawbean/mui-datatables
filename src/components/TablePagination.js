@@ -4,6 +4,7 @@ import MuiTableRow from '@material-ui/core/TableRow';
 import MuiTableFooter from '@material-ui/core/TableFooter';
 import MuiTablePagination from '@material-ui/core/TablePagination';
 import { withStyles } from '@material-ui/core/styles';
+import { getPageValue } from '../utils';
 
 const defaultPaginationStyles = {
   root: {
@@ -44,7 +45,6 @@ class TablePagination extends React.Component {
   };
 
   handlePageChange = (_, page) => {
-    const { options } = this.props;
     this.props.changePage(page);
   };
 
@@ -64,14 +64,27 @@ class TablePagination extends React.Component {
             }}
             count={count}
             rowsPerPage={rowsPerPage}
-            page={page}
+            page={getPageValue(count, rowsPerPage, page)}
             labelRowsPerPage={textLabels.rowsPerPage}
             labelDisplayedRows={({ from, to, count }) => `${from}-${to} ${textLabels.displayRows} ${count}`}
             backIconButtonProps={{
+              id: 'pagination-back',
+              'data-testid': 'pagination-back',
               'aria-label': textLabels.previous,
             }}
             nextIconButtonProps={{
+              id: 'pagination-next',
+              'data-testid': 'pagination-next',
               'aria-label': textLabels.next,
+            }}
+            SelectProps={{
+              id: 'pagination-input',
+              SelectDisplayProps: { id: 'pagination-rows', 'data-testid': 'pagination-rows' },
+              MenuProps: {
+                id: 'pagination-menu',
+                'data-testid': 'pagination-menu',
+                MenuListProps: { id: 'pagination-menu-list', 'data-testid': 'pagination-menu-list' },
+              },
             }}
             rowsPerPageOptions={options.rowsPerPageOptions}
             onChangePage={this.handlePageChange}

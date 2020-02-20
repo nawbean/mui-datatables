@@ -3,6 +3,7 @@ import ReactDOM from "react-dom";
 import MUIDataTable from "../../src/";
 import TableRow from "@material-ui/core/TableRow";
 import TableCell from "@material-ui/core/TableCell";
+import { MuiThemeProvider, createMuiTheme } from "@material-ui/core/styles";
 
 class Example extends React.Component {
 
@@ -14,7 +15,7 @@ class Example extends React.Component {
         options: {
           filter: true,
         }
-      },      
+      },
       {
         name: "Title",
         options: {
@@ -39,7 +40,7 @@ class Example extends React.Component {
           filter: true,
           sort: false
         }
-      }      
+      }
     ];
 
 
@@ -79,24 +80,46 @@ class Example extends React.Component {
     const options = {
       filter: true,
       filterType: 'dropdown',
-      responsive: 'scroll',
+      responsive: 'scrollMaxHeight',
       expandableRows: true,
+      expandableRowsOnClick: true,
+      isRowExpandable: (dataIndex, expandedRows) => {
+        // Prevent expand/collapse of any row if there are 4 rows expanded already (but allow those already expanded to be collapsed)
+        if (expandedRows.data.length > 4 && expandedRows.data.filter(d => d.dataIndex === dataIndex).length === 0) return false;
+        return true;
+      },
+      rowsExpanded: [0, 1],
       renderExpandableRow: (rowData, rowMeta) => {
+        const colSpan = rowData.length + 1;
         return (
           <TableRow>
-            <TableCell colSpan={rowData.length}>
+            <TableCell colSpan={colSpan}>
               Custom expandable row option. Data: {JSON.stringify(rowData)}
             </TableCell>
           </TableRow>
         );
-      }
+      },
+      onRowsExpand: (curExpanded, allExpanded) => console.log(curExpanded, allExpanded)
     };
 
+    const theme = createMuiTheme({
+      overrides: {
+        MUIDataTableSelectCell: {
+          expandDisabled: {
+            // Soft hide the button.
+            visibility: 'hidden',
+          },
+        },
+      },
+    });
+
     return (
-      <MUIDataTable title={"ACME Employee list"} data={data} columns={columns} options={options} />
+      <MuiThemeProvider theme={theme}>
+        <MUIDataTable title={"ACME Employee list"} data={data} columns={columns} options={options} />
+      </MuiThemeProvider>
     );
 
   }
 }
 
-ReactDOM.render(<Example />, document.getElementById("app-root"));
+export default Example;

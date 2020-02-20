@@ -13,37 +13,49 @@ import PrintIcon from '@material-ui/icons/Print';
 import ViewColumnIcon from '@material-ui/icons/ViewColumn';
 import FilterIcon from '@material-ui/icons/FilterList';
 import ReactToPrint from 'react-to-print';
-import styled from '../styled';
-import { createCSVDownload } from '../utils';
+import find from 'lodash.find';
+import { withStyles } from '@material-ui/core/styles';
+import { createCSVDownload, downloadCSV } from '../utils';
+import cloneDeep from 'lodash.clonedeep';
 
-export const defaultToolbarStyles = (theme, props) => ({
+export const defaultToolbarStyles = theme => ({
   root: {},
+  fullWidthRoot: {},
   left: {
-    flex: '1 1 55%',
+    flex: '1 1 auto',
+  },
+  fullWidthLeft: {
+    flex: '1 1 auto',
   },
   actions: {
-    flex: '0 0 45%',
+    flex: '1 1 auto',
+    textAlign: 'right',
+  },
+  fullWidthActions: {
+    flex: '1 1 auto',
     textAlign: 'right',
   },
   titleRoot: {},
   titleText: {},
+  fullWidthTitleText: {
+    textAlign: 'left',
+  },
   icon: {
     '&:hover': {
-      color: '#307BB0',
+      color: theme.palette.primary.main,
     },
   },
   iconActive: {
-    color: '#307BB0',
+    color: theme.palette.primary.main,
+  },
+  filterPaper: {
+    maxWidth: '50%',
   },
   searchIcon: {
     display: 'inline-flex',
     marginTop: '10px',
     marginRight: '8px',
   },
-  ...(props.options.responsive ? { ...responsiveToolbarStyles(theme) } : {}),
-});
-
-export const responsiveToolbarStyles = theme => ({
   [theme.breakpoints.down('sm')]: {
     titleRoot: {},
     titleText: {
@@ -78,46 +90,149 @@ export const responsiveToolbarStyles = theme => ({
   '@media screen and (max-width: 480px)': {},
 });
 
+const RESPONSIVE_FULL_WIDTH_NAME = 'scrollFullHeightFullWidth';
+
 class TableToolbar extends React.Component {
   state = {
     iconActive: null,
-    showSearch: false,
+    showSearch: Boolean(this.props.searchText || this.props.options.searchText || this.props.options.searchOpen),
+    searchText: this.props.searchText || null,
   };
 
+  componentDidUpdate(prevProps) {
+    if (this.props.searchText !== prevProps.searchText) {
+      this.setState({ searchText: this.props.searchText });
+    }
+  }
+
   handleCSVDownload = () => {
-    const { data, columns, options } = this.props;
-    createCSVDownload(columns, data, options);
+    const { data, displayData, columns, options } = this.props;
+    let dataToDownload = cloneDeep(data);
+    let columnsToDownload = columns;
+
+    if (options.downloadOptions && options.downloadOptions.filterOptions) {
+      // check rows first:
+      if (options.downloadOptions.filterOptions.useDisplayedRowsOnly) {
+        dataToDownload = displayData.map((row, index) => {
+          let i = -1;
+
+          // Help to preserve sort order in custom render columns
+          row.index = index;
+
+          return {
+            data: row.data.map(column => {
+              i += 1;
+
+              // if we have a custom render, which will appear as a react element, we must grab the actual value from data
+              // that matches the dataIndex and column
+              // TODO: Create a utility function for checking whether or not something is a react object
+              return typeof column === 'object' && column !== null && !Array.isArray(column)
+                ? find(data, d => d.index === row.dataIndex).data[i]
+                : column;
+            }),
+          };
+        });
+      }
+
+      // now, check columns:
+      if (options.downloadOptions.filterOptions.useDisplayedColumnsOnly) {
+        columnsToDownload = columns.filter((_, index) => _.display === 'true');
+
+        dataToDownload = dataToDownload.map(row => {
+          row.data = row.data.filter((_, index) => columns[index].display === 'true');
+          return row;
+        });
+      }
+    }
+    createCSVDownload(columnsToDownload, dataToDownload, options, downloadCSV);
   };
 
   setActiveIcon = iconName => {
-    this.setState(() => ({
-      iconActive: iconName,
-      showSearch: iconName === 'search' ? this.showSearch() : false,
-    }));
+    this.setState(
+      prevState => ({
+        showSearch: this.isSearchShown(iconName),
+        iconActive: iconName,
+        prevIconActive: prevState.iconActive,
+      }),
+      () => {
+        const { iconActive, prevIconActive } = this.state;
+
+        if (iconActive === 'filter') {
+          this.props.setTableAction('onFilterDialogOpen');
+          if (this.props.options.onFilterDialogOpen) {
+            this.props.options.onFilterDialogOpen();
+          }
+        }
+        if (iconActive === undefined && prevIconActive === 'filter') {
+          this.props.setTableAction('onFilterDialogClose');
+          if (this.props.options.onFilterDialogClose) {
+            this.props.options.onFilterDialogClose();
+          }
+        }
+      },
+    );
+  };
+
+  isSearchShown = iconName => {
+    let nextVal = false;
+    if (this.state.showSearch) {
+      if (this.state.searchText) {
+        nextVal = true;
+      } else {
+        const { onSearchClose } = this.props.options;
+        this.props.setTableAction('onSearchClose');
+        if (onSearchClose) onSearchClose();
+        nextVal = false;
+      }
+    } else if (iconName === 'search') {
+      nextVal = this.showSearch();
+    }
+    return nextVal;
   };
 
   getActiveIcon = (styles, iconName) => {
-    return this.state.iconActive !== iconName ? styles.icon : styles.iconActive;
+    let isActive = this.state.iconActive === iconName;
+    if (iconName === 'search') {
+      const { showSearch, searchText } = this.state;
+      isActive = isActive || showSearch || searchText;
+    }
+    return isActive ? styles.iconActive : styles.icon;
   };
 
   showSearch = () => {
-    !!this.props.options.onSearchOpen && this.props.options.onSearchOpen();
     this.props.setTableAction('onSearchOpen');
+    !!this.props.options.onSearchOpen && this.props.options.onSearchOpen();
     return true;
   };
 
   hideSearch = () => {
     const { onSearchClose } = this.props.options;
 
+    this.props.setTableAction('onSearchClose');
     if (onSearchClose) onSearchClose();
-    this.props.searchTextUpdate(null);
+    this.props.searchClose();
 
     this.setState(() => ({
       iconActive: null,
       showSearch: false,
+      searchText: null,
     }));
 
     this.searchButton.focus();
+  };
+
+  handleSearch = value => {
+    this.setState({ searchText: value });
+    this.props.searchTextUpdate(value);
+  };
+
+  handleSearchIconClick = () => {
+    const { showSearch, searchText } = this.state;
+    if (showSearch && !searchText) {
+      this.hideSearch();
+    } else {
+      this.setActiveIcon('search');
+    }
   };
 
   render() {
@@ -130,74 +245,101 @@ class TableToolbar extends React.Component {
       filterList,
       filterUpdate,
       resetFilters,
-      searchTextUpdate,
       toggleViewColumn,
       title,
       tableRef,
     } = this.props;
 
     const { search, downloadCsv, print, viewColumns, filterTable } = options.textLabels.toolbar;
-    const { showSearch } = this.state;
+    const { showSearch, searchText } = this.state;
 
     return (
-      <Toolbar className={classes.root} role={'toolbar'} aria-label={'Table Toolbar'}>
-        <div className={classes.left}>
+      <Toolbar
+        className={options.responsive !== RESPONSIVE_FULL_WIDTH_NAME ? classes.root : classes.fullWidthRoot}
+        role={'toolbar'}
+        aria-label={'Table Toolbar'}>
+        <div className={options.responsive !== RESPONSIVE_FULL_WIDTH_NAME ? classes.left : classes.fullWidthLeft}>
           {showSearch === true ? (
-            <TableSearch onSearch={searchTextUpdate} onHide={this.hideSearch} options={options} />
+            options.customSearchRender ? (
+              options.customSearchRender(searchText, this.handleSearch, this.hideSearch, options)
+            ) : (
+              <TableSearch
+                searchText={searchText}
+                onSearch={this.handleSearch}
+                onHide={this.hideSearch}
+                options={options}
+              />
+            )
+          ) : typeof title !== 'string' ? (
+            title
           ) : (
             <div className={classes.titleRoot} aria-hidden={'true'}>
-              <Typography variant="h6" className={classes.titleText}>
+              <Typography
+                variant="h6"
+                className={
+                  options.responsive !== RESPONSIVE_FULL_WIDTH_NAME ? classes.titleText : classes.fullWidthTitleText
+                }>
                 {title}
               </Typography>
             </div>
           )}
         </div>
-        <div className={classes.actions}>
+        <div className={options.responsive !== RESPONSIVE_FULL_WIDTH_NAME ? classes.actions : classes.fullWidthActions}>
           {options.search && (
-            <Tooltip title={search}>
+            <Tooltip title={search} disableFocusListener>
               <IconButton
                 aria-label={search}
+                data-testid={search + '-iconButton'}
                 buttonRef={el => (this.searchButton = el)}
                 classes={{ root: this.getActiveIcon(classes, 'search') }}
-                onClick={this.setActiveIcon.bind(null, 'search')}>
+                onClick={this.handleSearchIconClick}>
                 <SearchIcon />
               </IconButton>
             </Tooltip>
           )}
           {options.download && (
             <Tooltip title={downloadCsv}>
-              <IconButton aria-label={downloadCsv} classes={{ root: classes.icon }} onClick={this.handleCSVDownload}>
+              <IconButton
+                data-testid={downloadCsv + '-iconButton'}
+                aria-label={downloadCsv}
+                classes={{ root: classes.icon }}
+                onClick={this.handleCSVDownload}>
                 <DownloadIcon />
               </IconButton>
             </Tooltip>
           )}
           {options.print && (
-            <Tooltip title={print}>
-              <span>
-                <ReactToPrint
-                  trigger={() => (
-                    <IconButton aria-label={print} classes={{ root: classes.icon }}>
-                      <PrintIcon />
-                    </IconButton>
-                  )}
-                  content={() => this.props.tableRef()}
-                />
-              </span>
-            </Tooltip>
+            <span>
+              <ReactToPrint
+                trigger={() => (
+                  <span>
+                    <Tooltip title={print}>
+                      <IconButton
+                        data-testid={print + '-iconButton'}
+                        aria-label={print}
+                        classes={{ root: classes.icon }}>
+                        <PrintIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </span>
+                )}
+                content={() => this.props.tableRef()}
+              />
+            </span>
           )}
           {options.viewColumns && (
             <Popover
               refExit={this.setActiveIcon.bind(null)}
-              container={tableRef}
               trigger={
-                <IconButton
-                  aria-label={viewColumns}
-                  classes={{ root: this.getActiveIcon(classes, 'viewcolumns') }}
-                  onClick={this.setActiveIcon.bind(null, 'viewcolumns')}>
-                  <Tooltip title={viewColumns}>
+                <Tooltip title={viewColumns} disableFocusListener>
+                  <IconButton
+                    data-testid={viewColumns + '-iconButton'}
+                    aria-label={viewColumns}
+                    classes={{ root: this.getActiveIcon(classes, 'viewcolumns') }}
+                    onClick={this.setActiveIcon.bind(null, 'viewcolumns')}>
                     <ViewColumnIcon />
-                  </Tooltip>
-                </IconButton>
+                  </IconButton>
+                </Tooltip>
               }
               content={
                 <TableViewCol data={data} columns={columns} options={options} onColumnUpdate={toggleViewColumn} />
@@ -207,19 +349,21 @@ class TableToolbar extends React.Component {
           {options.filter && (
             <Popover
               refExit={this.setActiveIcon.bind(null)}
-              container={tableRef}
+              classes={{ paper: classes.filterPaper }}
               trigger={
-                <IconButton
-                  aria-label={filterTable}
-                  classes={{ root: this.getActiveIcon(classes, 'filter') }}
-                  onClick={this.setActiveIcon.bind(null, 'filter')}>
-                  <Tooltip title={filterTable}>
+                <Tooltip title={filterTable} disableFocusListener>
+                  <IconButton
+                    data-testid={filterTable + '-iconButton'}
+                    aria-label={filterTable}
+                    classes={{ root: this.getActiveIcon(classes, 'filter') }}
+                    onClick={this.setActiveIcon.bind(null, 'filter')}>
                     <FilterIcon />
-                  </Tooltip>
-                </IconButton>
+                  </IconButton>
+                </Tooltip>
               }
               content={
                 <TableFilter
+                  customFooter={options.customFilterDialogFooter}
                   columns={columns}
                   options={options}
                   filterList={filterList}
@@ -237,4 +381,4 @@ class TableToolbar extends React.Component {
   }
 }
 
-export default styled(TableToolbar)(defaultToolbarStyles, { name: 'MUIDataTableToolbar' });
+export default withStyles(defaultToolbarStyles, { name: 'MUIDataTableToolbar' })(TableToolbar);

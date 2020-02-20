@@ -3,6 +3,9 @@ import ReactDOM from "react-dom";
 import MUIDataTable from "../../src/";
 
 class Example extends React.Component {
+  state = {
+    rowsSelected: []
+  };
 
   render() {
 
@@ -49,14 +52,21 @@ class Example extends React.Component {
 
     const options = {
       filter: true,
-      selectableRows: true,
+      selectableRows: 'multiple',
+      selectableRowsOnClick: true,
       filterType: 'dropdown',
       responsive: 'stacked',
       rowsPerPage: 10,
+      rowsSelected: this.state.rowsSelected,
       onRowsSelect: (rowsSelected, allRows) => {
         console.log(rowsSelected, allRows);
+        this.setState({ rowsSelected: allRows.map(row => row.dataIndex) });
       },
       onRowsDelete: (rowsDeleted) => {
+        if (rowsDeleted.data[0].dataIndex === 0) {
+          window.alert('Can\'t delete this!');
+          return false;
+        };
         console.log(rowsDeleted, "were deleted!");
       },
       onChangePage: (numberRows) => {
@@ -74,16 +84,19 @@ class Example extends React.Component {
       onFilterChange: (column, filters) => {
         console.log(column, filters);
       },
-      onCellClick: (cellIndex, rowIndex) => {
-        console.log(cellIndex, rowIndex);
+      onCellClick: (cellData, cellMeta) => {
+        console.log(cellData, cellMeta);
       },
       onRowClick: (rowData, rowState) => {
         console.log(rowData, rowState);
       },
-      isRowSelectable: (dataIndex) => {
+      isRowSelectable: (dataIndex, selectedRows) => {
+        //prevents selection of any additional row after the third
+        if (selectedRows.data.length > 2 && selectedRows.data.filter(d => d.dataIndex === dataIndex).length === 0) return false;
         //prevents selection of row with title "Attorney"
         return data[dataIndex][1] != "Attorney";
-      }
+      },
+      selectableRowsHeader: false
     };
 
     return (
@@ -93,4 +106,4 @@ class Example extends React.Component {
   }
 }
 
-ReactDOM.render(<Example />, document.getElementById("app-root"));
+export default Example;

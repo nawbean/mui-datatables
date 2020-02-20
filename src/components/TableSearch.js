@@ -6,12 +6,13 @@ import IconButton from '@material-ui/core/IconButton';
 import ClearIcon from '@material-ui/icons/Clear';
 import { withStyles } from '@material-ui/core/styles';
 
-const defaultSearchStyles = {
+const defaultSearchStyles = theme => ({
   main: {
     display: 'flex',
     flex: '1 0 auto',
   },
   searchIcon: {
+    color: theme.palette.text.secondary,
     marginTop: '10px',
     marginRight: '8px',
   },
@@ -20,19 +21,13 @@ const defaultSearchStyles = {
   },
   clearIcon: {
     '&:hover': {
-      color: '#FF0000',
+      color: theme.palette.error.main,
     },
   },
-};
+});
 
 class TableSearch extends React.Component {
   handleTextChange = event => {
-    const { onSearchChange } = this.props.options;
-
-    if (onSearchChange) {
-      onSearchChange(event.target.value);
-    }
-
     this.props.onSearch(event.target.value);
   };
 
@@ -51,7 +46,7 @@ class TableSearch extends React.Component {
   };
 
   render() {
-    const { classes, options, onHide } = this.props;
+    const { classes, options, onHide, searchText } = this.props;
 
     return (
       <Grow appear in={true} timeout={300}>
@@ -61,11 +56,16 @@ class TableSearch extends React.Component {
             className={classes.searchText}
             autoFocus={true}
             InputProps={{
+              'data-test-id': options.textLabels.toolbar.search,
+            }}
+            inputProps={{
               'aria-label': options.textLabels.toolbar.search,
             }}
+            value={searchText || ''}
             onChange={this.handleTextChange}
             fullWidth={true}
             inputRef={el => (this.searchField = el)}
+            placeholder={options.searchPlaceholder}
           />
           <IconButton className={classes.clearIcon} onClick={onHide}>
             <ClearIcon />
